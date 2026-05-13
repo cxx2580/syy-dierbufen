@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简易ERP系统</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui@2.15.14/lib/theme-chalk/index.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body, #app {
+            height: 100%;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+        .app-header {
+            background-color: #409EFF;
+            color: white;
+            padding: 0 20px;
+            height: 60px;
+            line-height: 60px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .app-container {
+            display: flex;
+            height: calc(100% - 60px);
+        }
+        .app-sidebar {
+            width: 200px;
+            background-color: #f5f7fa;
+            border-right: 1px solid #e6e6e6;
+        }
+        .app-main {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+        }
+        .el-menu-item.is-active {
+            background-color: #ecf5ff !important;
+            color: #409EFF !important;
+        }
+        .page-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .search-bar {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="app-header">简易ERP系统</div>
+        <div class="app-container">
+            <div class="app-sidebar">
+                <el-menu :default-active="activeMenu" @select="handleMenuSelect">
+                    <el-menu-item index="customer">
+                        <i class="el-icon-user"></i>
+                        <span>客户管理</span>
+                    </el-menu-item>
+                    <el-menu-item index="product">
+                        <i class="el-icon-goods"></i>
+                        <span>产品管理</span>
+                    </el-menu-item>
+                    <el-menu-item index="sales-order">
+                        <i class="el-icon-document"></i>
+                        <span>销售订单</span>
+                    </el-menu-item>
+                    <el-menu-item index="production">
+                        <i class="el-icon-s-operation"></i>
+                        <span>生产管理</span>
+                    </el-menu-item>
+                </el-menu>
+            </div>
+            <div class="app-main">
+                <customer-page v-if="activeMenu === 'customer'" @refresh="loadCustomers"></customer-page>
+                <product-page v-if="activeMenu === 'product'" @refresh="loadProducts"></product-page>
+                <sales-order-page v-if="activeMenu === 'sales-order'" :customers="customers" :products="products" @refresh="loadSalesOrders"></sales-order-page>
+                <production-page v-if="activeMenu === 'production'" :products="products"></production-page>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://unpkg.com/element-ui@2.15.14/lib/index.js"></script>
+    <script src="https://unpkg.com/axios@1.4.0/dist/axios.min.js"></script>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+
+        Vue.component('customer-page', {
+            template: `
+                <div>
+                    <div class="page-title">
+                        <span>客户管理</span>
+                        <el-button type="primary" @click="handleAdd">新增客户</el-button>
+                    </div>
+                    <div class="search-bar">
+                        <el-input v-model="searchName" placeholder="请输入客户名称" style="width: 300px; margin-right: 10px;"></el-input>
+                        <el-button type="primary" @click="loadCustomers">搜索</el-button>
+                    </div>
+                    <el-table :data="tableData" border style="width: 100%">
+                        <el-table-column prop="customerNo" label="客户编号" width="120"></el-table-column>
+                        <el-table-column prop="customerName" label="客户名称" width="180"></el-table-column>
+                        <el-table-column prop="contact" label="联系人" width="100"></el-table-column>
+                        <el-table-column prop="phone" label="联系电话" width="130"></el-table-column>
+                        <el-table-column prop="email" label="邮箱" width="180"></el-table-column>
+                        <el-table-column prop="address" label="地址"></el-table-column>
+                        <el-table-column prop="status" label="状态" width="80">
+                            <template slot-scope="scope">
+                                <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
+                                    {{ scope.row.status === 1 ? '启用' : '禁用' }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="180" fixed="right">
+                            <template slot-scope="scope">
+                                <el-button size="mini" @click="handleEdit(scope.row)">编辑</el-button>
+                                <el-button size="mini" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="600px">
+                        <el-form :model="form" :rules="rules" ref="form" label-width="100px">
+                            <el-form-item label="客户编号" prop="customerNo">
+                                <el-input v-model="form.customerNo" :disabled="isEdit"></el-input>
+                            </el-form-item>
+                            <el-form-item label="客户名称" prop="customerName">
+                                <el-input v-model="form.customerName"></el-input>
+                            </el-form-item>
+                            <el-form-item label="联系人" prop="contact">
+                                <el-input v-model="form.contact"></el-input>
+                            </el-form-item>
+                            <el-form-item label="联系电话" prop="phone">
+                                <el-input v-model="form.phone"></el-input>
+                            </el-form-item>
+                            <el-form-item label="邮箱" prop="email">
+                                <el-input v-model="form.email"></el-input>
+                            </el-form-item>
+                            <el-form-item label="地址" prop="address">
+                                <el-input v-model="form.address"></el-input>
+                            </el-form-item>
+                            <el-form-item label="状态" prop="status">
+                                <el-radio-group v-model="form.status">
+                                    <el-radio :label="1">启用</el-radio>
+                                    <el-radio :label="0">禁用</el-radio>
+                                </el-radio-group>
+                            </el-form-item>
+                        </el-form>
+                        <span slot="footer" class="dialog-footer">
+                            <el-button @click="dialogVisible = false">取 消</el-button>
+                            <el-button type="primary" @click="handleSubmit">确 定</el-button>
+                        </span>
+                    </el-dialog>
+                </div>
+            `,
+            props: ['refresh'],
+            data() {
+                return {
+                    searchName: '',
+                    tableData: [],
+                    dialogVisible: false,
+                    dialogTitle: '',
+                    isEdit: false,
+                    form: {
+                        id: null,
+                        customerNo: '',
+                        customerName: '',
+                        contact: '',
+                        phone: '',
+                        email: '',
+                        address: '',
+                        status: 1
+                    },
+                    rules: {
+                        customerNo: [{ required: true, message: '请输入客户编号', trigger: 'blur' }],
+                        customerName: [{ required: true, message: '请输入客户名称', trigger: 'blur' }]
+                    }
+                }
+            },
+            mounted() {
+                this.loadCustomers();
+            },
+            methods: {
+                loadCustomers() {
+                    axios.get(API_BASE + '/customer/list', { params: { customerName: this.searchName } })
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.tableData = res.data.data;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载客户列表失败: ' + err.message);
+                        });
+                },
+                handleAdd() {
+                    this.isEdit = false;
+                    this.dialogTitle = '新增客户';
+                    this.form = {
+                        id: null,
+                        customerNo: '',
+                        customerName: '',
+                        contact: '',
+                        phone: '',
+                        email: '',
+                        address: '',
+                        status: 1
+                    };
+                    this.dialogVisible = true;
+                },
+                handleEdit(row) {
+                    this.isEdit = true;
+                    this.dialogTitle = '编辑客户';
+                    this.form = { ...row };
+                    this.dialogVisible = true;
+                },
+                handleSubmit() {
+                    this.$refs.form.validate(valid => {
+                        if (valid) {
+                            const url = this.isEdit ? API_BASE + '/customer/update' : API_BASE + '/customer/add';
+                            axios.post(url, this.form)
+                                .then(res => {
+                                    if (res.data.code === 200) {
+                                        this.$message.success('操作成功');
+                                        this.dialogVisible = false;
+                                        this.loadCustomers();
+                                        this.$emit('refresh');
+                                    } else {
+                                        this.$message.error(res.data.message);
+                                    }
+                                })
+                                .catch(err => {
+                                    this.$message.error('操作失败: ' + err.message);
+                                });
+                        }
+                    });
+                },
+                handleDelete(row) {
+                    this.$confirm('确定要删除该客户吗？', '提示', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }).then(() => {
+                        axios.delete(API_BASE + '/customer/delete/' + row.id)
+                            .then(res => {
+                                if (res.data.code === 200) {
+                                    this.$message.success('删除成功');
+                                    this.loadCustomers();
+                                    this.$emit('refresh');
+                                } else {
+                                    this.$message.error(res.data.message);
+                                }
+                            })
+                            .catch(err => {
+                                this.$message.error('删除失败: ' + err.message);
+                            });
+                    }).catch(() => {});
+                }
+            }
+        });
+
+        Vue.component('product-page', {
+            template: `
+                <div>
+                    <div class="page-title">
+                        <span>产品管理</span>
+                        <el-button type="primary" @click="handleAdd">新增产品</el-button>
+                    </div>
+                    <div class="search-bar">
+                        <el-input v-model="searchName" placeholder="请输入产品名称" style="width: 300px; margin-right: 10px;"></el-input>
+                        <el-button type="primary" @click="loadProducts">搜索</el-button>
+                    </div>
+                    <el-table :data="tableData" border style="width: 100%">
+                        <el-table-column prop="productNo" label="产品编号" width="120"></el-table-column>
+                        <el-table-column prop="productName" label="产品名称" width="180"></el-table-column>
+                        <el-table-column prop="specification" label="规格" width="150"></el-table-column>
+                        <el-table-column prop="unit" label="单位" width="80"></el-table-column>
+                        <el-table-column prop="price" label="单价" width="120">
+                            <template slot-scope="scope">
+                                ¥{{ scope.row.price }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="stock" label="库存" width="80"></el-table-column>
+                        <el-table-column prop="status" label="状态" width="80">
+                            <template slot-scope="scope">
+                                <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
+                                    {{ scope.row.status === 1 ? '启用' : '禁用' }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="180" fixed="right">
+                            <template slot-scope="scope">
+                                <el-button size="mini" @click="handleEdit(scope.row)">编辑</el-button>
+                                <el-button size="mini" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="600px">
+                        <el-form :model="form" :rules="rules" ref="form" label-width="100px">
+                            <el-form-item label="产品编号" prop="productNo">
+                                <el-input v-model="form.productNo" :disabled="isEdit"></el-input>
+                            </el-form-item>
+                            <el-form-item label="产品名称" prop="productName">
+                                <el-input v-model="form.productName"></el-input>
+                            </el-form-item>
+                            <el-form-item label="规格" prop="specification">
+                                <el-input v-model="form.specification"></el-input>
+                            </el-form-item>
+                            <el-form-item label="单位" prop="unit">
+                                <el-input v-model="form.unit"></el-input>
+                            </el-form-item>
+                            <el-form-item label="单价" prop="price">
+                                <el-input-number v-model="form.price" :min="0" :precision="2" style="width: 100%"></el-input-number>
+                            </el-form-item>
+                            <el-form-item label="库存" prop="stock">
+                                <el-input-number v-model="form.stock" :min="0" style="width: 100%"></el-input-number>
+                            </el-form-item>
+                            <el-form-item label="状态" prop="status">
+                                <el-radio-group v-model="form.status">
+                                    <el-radio :label="1">启用</el-radio>
+                                    <el-radio :label="0">禁用</el-radio>
+                                </el-radio-group>
+                            </el-form-item>
+                        </el-form>
+                        <span slot="footer" class="dialog-footer">
+                            <el-button @click="dialogVisible = false">取 消</el-button>
+                            <el-button type="primary" @click="handleSubmit">确 定</el-button>
+                        </span>
+                    </el-dialog>
+                </div>
+            `,
+            data() {
+                return {
+                    searchName: '',
+                    tableData: [],
+                    dialogVisible: false,
+                    dialogTitle: '',
+                    isEdit: false,
+                    form: {
+                        id: null,
+                        productNo: '',
+                        productName: '',
+                        specification: '',
+                        unit: '',
+                        price: 0,
+                        stock: 0,
+                        status: 1
+                    },
+                    rules: {
+                        productNo: [{ required: true, message: '请输入产品编号', trigger: 'blur' }],
+                        productName: [{ required: true, message: '请输入产品名称', trigger: 'blur' }],
+                        price: [{ required: true, message: '请输入单价', trigger: 'blur' }]
+                    }
+                }
+            },
+            mounted() {
+                this.loadProducts();
+            },
+            methods: {
+                loadProducts() {
+                    axios.get(API_BASE + '/product/list', { params: { productName: this.searchName } })
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.tableData = res.data.data;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载产品列表失败: ' + err.message);
+                        });
+                },
+                handleAdd() {
+                    this.isEdit = false;
+                    this.dialogTitle = '新增产品';
+                    this.form = {
+                        id: null,
+                        productNo: '',
+                        productName: '',
+                        specification: '',
+                        unit: '',
+                        price: 0,
+                        stock: 0,
+                        status: 1
+                    };
+                    this.dialogVisible = true;
+                },
+                handleEdit(row) {
+                    this.isEdit = true;
+                    this.dialogTitle = '编辑产品';
+                    this.form = { ...row };
+                    this.dialogVisible = true;
+                },
+                handleSubmit() {
+                    this.$refs.form.validate(valid => {
+                        if (valid) {
+                            const url = this.isEdit ? API_BASE + '/product/update' : API_BASE + '/product/add';
+                            axios.post(url, this.form)
+                                .then(res => {
+                                    if (res.data.code === 200) {
+                                        this.$message.success('操作成功');
+                                        this.dialogVisible = false;
+                                        this.loadProducts();
+                                        this.$emit('refresh');
+                                    } else {
+                                        this.$message.error(res.data.message);
+                                    }
+                                })
+                                .catch(err => {
+                                    this.$message.error('操作失败: ' + err.message);
+                                });
+                        }
+                    });
+                },
+                handleDelete(row) {
+                    this.$confirm('确定要删除该产品吗？', '提示', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }).then(() => {
+                        axios.delete(API_BASE + '/product/delete/' + row.id)
+                            .then(res => {
+                                if (res.data.code === 200) {
+                                    this.$message.success('删除成功');
+                                    this.loadProducts();
+                                    this.$emit('refresh');
+                                } else {
+                                    this.$message.error(res.data.message);
+                                }
+                            })
+                            .catch(err => {
+                                this.$message.error('删除失败: ' + err.message);
+                            });
+                    }).catch(() => {});
+                }
+            }
+        });
+
+        Vue.component('sales-order-page', {
+            template: `
+                <div>
+                    <div class="page-title">
+                        <span>销售订单管理</span>
+                        <el-button type="primary" @click="handleAdd">新增订单</el-button>
+                    </div>
+                    <div class="search-bar">
+                        <el-input v-model="searchNo" placeholder="请输入订单编号" style="width: 300px; margin-right: 10px;"></el-input>
+                        <el-button type="primary" @click="loadSalesOrders">搜索</el-button>
+                    </div>
+                    <el-table :data="tableData" border style="width: 100%">
+                        <el-table-column prop="orderNo" label="订单编号" width="150"></el-table-column>
+                        <el-table-column prop="customerName" label="客户名称" width="180"></el-table-column>
+                        <el-table-column prop="totalAmount" label="总金额" width="120">
+                            <template slot-scope="scope">
+                                ¥{{ scope.row.totalAmount }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="status" label="状态" width="120">
+                            <template slot-scope="scope">
+                                <el-tag :type="getStatusType(scope.row.status)">
+                                    {{ getStatusText(scope.row.status) }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="remark" label="备注"></el-table-column>
+                        <el-table-column prop="createTime" label="创建时间" width="180"></el-table-column>
+                        <el-table-column label="操作" width="220" fixed="right">
+                            <template slot-scope="scope">
+                                <el-button size="mini" @click="handleView(scope.row)">查看</el-button>
+                                <el-button size="mini" @click="handleEdit(scope.row)">编辑</el-button>
+                                <el-button size="mini" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="900px">
+                        <el-form :model="form" :rules="rules" ref="form" label-width="100px">
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="订单编号" prop="orderNo">
+                                        <el-input v-model="form.orderNo" :disabled="isEdit || isView"></el-input>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="客户" prop="customerId">
+                                        <el-select v-model="form.customerId" placeholder="请选择客户" style="width: 100%" @change="onCustomerChange" :disabled="isView">
+                                            <el-option v-for="c in customers" :key="c.id" :label="c.customerName" :value="c.id"></el-option>
+                                        </el-select>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="订单状态" prop="status">
+                                <el-radio-group v-model="form.status" :disabled="isView">
+                                    <el-radio :label="0">待审核</el-radio>
+                                    <el-radio :label="1">已审核</el-radio>
+                                    <el-radio :label="2">已发货</el-radio>
+                                    <el-radio :label="3">已完成</el-radio>
+                                    <el-radio :label="4">已取消</el-radio>
+                                </el-radio-group>
+                            </el-form-item>
+                            <el-form-item label="备注" prop="remark">
+                                <el-input v-model="form.remark" type="textarea" :rows="2" :disabled="isView"></el-input>
+                            </el-form-item>
+                            <el-form-item label="订单明细" v-if="!isView">
+                                <el-button type="primary" size="small" @click="addItem">添加产品</el-button>
+                            </el-form-item>
+                            <el-table :data="items" border style="width: 100%; margin-bottom: 20px;">
+                                <el-table-column label="产品" width="200">
+                                    <template slot-scope="scope">
+                                        <el-select v-model="scope.row.productId" placeholder="请选择产品" @change="onProductChange(scope.$index)" :disabled="isView">
+                                            <el-option v-for="p in products" :key="p.id" :label="p.productName" :value="p.id"></el-option>
+                                        </el-select>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="规格" width="150">
+                                    <template slot-scope="scope">
+                                        {{ scope.row.specification }}
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="单位" width="80">
+                                    <template slot-scope="scope">
+                                        {{ scope.row.unit }}
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="单价" width="120">
+                                    <template slot-scope="scope">
+                                        <el-input-number v-model="scope.row.price" :min="0" :precision="2" size="small" @change="calculateSubtotal(scope.$index)" :disabled="isView"></el-input-number>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="数量" width="100">
+                                    <template slot-scope="scope">
+                                        <el-input-number v-model="scope.row.quantity" :min="1" size="small" @change="calculateSubtotal(scope.$index)" :disabled="isView"></el-input-number>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="小计" width="120">
+                                    <template slot-scope="scope">
+                                        ¥{{ scope.row.subtotal }}
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="操作" width="80" v-if="!isView">
+                                    <template slot-scope="scope">
+                                        <el-button type="danger" size="mini" @click="removeItem(scope.$index)">删除</el-button>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                            <el-form-item label="总金额">
+                                <span style="font-size: 20px; font-weight: bold; color: #f56c6c;">¥{{ totalAmount }}</span>
+                            </el-form-item>
+                        </el-form>
+                        <span slot="footer" class="dialog-footer" v-if="!isView">
+                            <el-button @click="dialogVisible = false">取 消</el-button>
+                            <el-button type="primary" @click="handleSubmit">确 定</el-button>
+                        </span>
+                        <span slot="footer" class="dialog-footer" v-else>
+                            <el-button @click="dialogVisible = false">关 闭</el-button>
+                        </span>
+                    </el-dialog>
+                </div>
+            `,
+            props: ['customers', 'products'],
+            data() {
+                return {
+                    searchNo: '',
+                    tableData: [],
+                    dialogVisible: false,
+                    dialogTitle: '',
+                    isEdit: false,
+                    isView: false,
+                    form: {
+                        id: null,
+                        orderNo: '',
+                        customerId: null,
+                        customerName: '',
+                        totalAmount: 0,
+                        status: 0,
+                        remark: ''
+                    },
+                    items: [],
+                    rules: {
+                        orderNo: [{ required: true, message: '请输入订单编号', trigger: 'blur' }],
+                        customerId: [{ required: true, message: '请选择客户', trigger: 'change' }]
+                    }
+                }
+            },
+            computed: {
+                totalAmount() {
+                    return this.items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+                }
+            },
+            mounted() {
+                this.loadSalesOrders();
+            },
+            methods: {
+                loadSalesOrders() {
+                    axios.get(API_BASE + '/sales-order/list', { params: { orderNo: this.searchNo } })
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.tableData = res.data.data;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载订单列表失败: ' + err.message);
+                        });
+                },
+                getStatusType(status) {
+                    const types = ['info', 'primary', 'warning', 'success', 'danger'];
+                    return types[status] || 'info';
+                },
+                getStatusText(status) {
+                    const texts = ['待审核', '已审核', '已发货', '已完成', '已取消'];
+                    return texts[status] || '未知';
+                },
+                handleAdd() {
+                    this.isEdit = false;
+                    this.isView = false;
+                    this.dialogTitle = '新增订单';
+                    this.form = {
+                        id: null,
+                        orderNo: 'SO' + Date.now(),
+                        customerId: null,
+                        customerName: '',
+                        totalAmount: 0,
+                        status: 0,
+                        remark: ''
+                    };
+                    this.items = [];
+                    this.dialogVisible = true;
+                },
+                handleView(row) {
+                    this.isEdit = false;
+                    this.isView = true;
+                    this.dialogTitle = '查看订单';
+                    axios.get(API_BASE + '/sales-order/get/' + row.id)
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.form = res.data.data.order;
+                                this.items = res.data.data.items;
+                                this.dialogVisible = true;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载订单详情失败: ' + err.message);
+                        });
+                },
+                handleEdit(row) {
+                    this.isEdit = true;
+                    this.isView = false;
+                    this.dialogTitle = '编辑订单';
+                    axios.get(API_BASE + '/sales-order/get/' + row.id)
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.form = res.data.data.order;
+                                this.items = res.data.data.items;
+                                this.dialogVisible = true;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载订单详情失败: ' + err.message);
+                        });
+                },
+                onCustomerChange(customerId) {
+                    const customer = this.customers.find(c => c.id === customerId);
+                    if (customer) {
+                        this.form.customerName = customer.customerName;
+                    }
+                },
+                onProductChange(index) {
+                    const product = this.products.find(p => p.id === this.items[index].productId);
+                    if (product) {
+                        this.items[index].productName = product.productName;
+                        this.items[index].specification = product.specification;
+                        this.items[index].unit = product.unit;
+                        this.items[index].price = product.price;
+                        this.items[index].quantity = 1;
+                        this.calculateSubtotal(index);
+                    }
+                },
+                addItem() {
+                    this.items.push({
+                        productId: null,
+                        productName: '',
+                        specification: '',
+                        unit: '',
+                        price: 0,
+                        quantity: 1,
+                        subtotal: 0
+                    });
+                },
+                removeItem(index) {
+                    this.items.splice(index, 1);
+                },
+                calculateSubtotal(index) {
+                    const item = this.items[index];
+                    item.subtotal = (item.price || 0) * (item.quantity || 0);
+                },
+                handleSubmit() {
+                    this.$refs.form.validate(valid => {
+                        if (valid) {
+                            if (this.items.length === 0) {
+                                this.$message.warning('请至少添加一个产品');
+                                return;
+                            }
+                            this.form.totalAmount = this.totalAmount;
+                            const url = this.isEdit ? API_BASE + '/sales-order/update' : API_BASE + '/sales-order/add';
+                            axios.post(url, { order: this.form, items: this.items })
+                                .then(res => {
+                                    if (res.data.code === 200) {
+                                        this.$message.success('操作成功');
+                                        this.dialogVisible = false;
+                                        this.loadSalesOrders();
+                                    } else {
+                                        this.$message.error(res.data.message);
+                                    }
+                                })
+                                .catch(err => {
+                                    this.$message.error('操作失败: ' + err.message);
+                                });
+                        }
+                    });
+                },
+                handleDelete(row) {
+                    this.$confirm('确定要删除该订单吗？', '提示', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }).then(() => {
+                        axios.delete(API_BASE + '/sales-order/delete/' + row.id)
+                            .then(res => {
+                                if (res.data.code === 200) {
+                                    this.$message.success('删除成功');
+                                    this.loadSalesOrders();
+                                } else {
+                                    this.$message.error(res.data.message);
+                                }
+                            })
+                            .catch(err => {
+                                this.$message.error('删除失败: ' + err.message);
+                            });
+                    }).catch(() => {});
+                }
+            }
+        });
+
+        Vue.component('production-page', {
+            template: `
+                <div>
+                    <div class="page-title">
+                        <span>生产管理</span>
+                        <el-button type="primary" @click="handleAdd">新增生产订单</el-button>
+                    </div>
+                    <div class="search-bar">
+                        <el-input v-model="searchNo" placeholder="请输入生产单号" style="width: 300px; margin-right: 10px;"></el-input>
+                        <el-button type="primary" @click="loadOrders">搜索</el-button>
+                    </div>
+                    <el-table :data="tableData" border style="width: 100%">
+                        <el-table-column prop="productionNo" label="生产单号" width="140"></el-table-column>
+                        <el-table-column prop="productName" label="产品名称" width="150"></el-table-column>
+                        <el-table-column prop="specification" label="规格" width="130"></el-table-column>
+                        <el-table-column prop="quantity" label="数量" width="80"></el-table-column>
+                        <el-table-column prop="totalAmount" label="总金额" width="120">
+                            <template slot-scope="scope">
+                                ¥{{ scope.row.totalAmount }}
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="startDate" label="开始日期" width="120"></el-table-column>
+                        <el-table-column prop="endDate" label="预计完成" width="120"></el-table-column>
+                        <el-table-column prop="status" label="状态" width="100">
+                            <template slot-scope="scope">
+                                <el-tag :type="getStatusType(scope.row.status)">
+                                    {{ getStatusText(scope.row.status) }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="responsiblePerson" label="负责人" width="100"></el-table-column>
+                        <el-table-column label="操作" width="180" fixed="right">
+                            <template slot-scope="scope">
+                                <el-button size="mini" @click="handleEdit(scope.row)">编辑</el-button>
+                                <el-button size="mini" type="danger" @click="handleDelete(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+
+                    <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="700px">
+                        <el-form :model="form" :rules="rules" ref="form" label-width="100px">
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="生产单号" prop="productionNo">
+                                        <el-input v-model="form.productionNo" :disabled="isEdit"></el-input>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="产品" prop="productId">
+                                        <el-select v-model="form.productId" placeholder="请选择产品" style="width: 100%" @change="onProductChange" :disabled="isEdit">
+                                            <el-option v-for="p in products" :key="p.id" :label="p.productName" :value="p.id"></el-option>
+                                        </el-select>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-row :gutter="20">
+                                <el-col :span="8">
+                                    <el-form-item label="规格">
+                                        <el-input v-model="form.specification" disabled></el-input>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="单位">
+                                        <el-input v-model="form.unit" disabled></el-input>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="单价">
+                                        <el-input v-model="form.price" disabled></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="生产数量" prop="quantity">
+                                        <el-input-number v-model="form.quantity" :min="1" style="width: 100%" @change="calcTotalAmount"></el-input-number>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="总金额">
+                                        <span style="font-size: 16px; font-weight: bold; color: #f56c6c;">¥{{ form.totalAmount }}</span>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-row :gutter="20">
+                                <el-col :span="8">
+                                    <el-form-item label="开始日期" prop="startDate">
+                                        <el-date-picker v-model="form.startDate" type="date" placeholder="选择日期" value-format="yyyy-MM-dd" style="width: 100%"></el-date-picker>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="预计完成" prop="endDate">
+                                        <el-date-picker v-model="form.endDate" type="date" placeholder="选择日期" value-format="yyyy-MM-dd" style="width: 100%"></el-date-picker>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="实际完成">
+                                        <el-date-picker v-model="form.actualEndDate" type="date" placeholder="选择日期" value-format="yyyy-MM-dd" style="width: 100%"></el-date-picker>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-row :gutter="20">
+                                <el-col :span="12">
+                                    <el-form-item label="生产状态" prop="status">
+                                        <el-radio-group v-model="form.status">
+                                            <el-radio :label="0">计划中</el-radio>
+                                            <el-radio :label="1">生产中</el-radio>
+                                            <el-radio :label="2">已完成</el-radio>
+                                            <el-radio :label="3">已取消</el-radio>
+                                        </el-radio-group>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="12">
+                                    <el-form-item label="负责人" prop="responsiblePerson">
+                                        <el-input v-model="form.responsiblePerson" placeholder="请输入负责人"></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item label="备注" prop="remark">
+                                <el-input v-model="form.remark" type="textarea" :rows="2"></el-input>
+                            </el-form-item>
+                        </el-form>
+                        <span slot="footer" class="dialog-footer">
+                            <el-button @click="dialogVisible = false">取 消</el-button>
+                            <el-button type="primary" @click="handleSubmit">确 定</el-button>
+                        </span>
+                    </el-dialog>
+                </div>
+            `,
+            props: ['products'],
+            data() {
+                return {
+                    searchNo: '',
+                    tableData: [],
+                    dialogVisible: false,
+                    dialogTitle: '',
+                    isEdit: false,
+                    form: {
+                        id: null,
+                        productionNo: '',
+                        productId: null,
+                        productName: '',
+                        specification: '',
+                        unit: '',
+                        quantity: 1,
+                        price: 0,
+                        totalAmount: 0,
+                        startDate: '',
+                        endDate: '',
+                        actualEndDate: '',
+                        status: 0,
+                        responsiblePerson: '',
+                        remark: ''
+                    },
+                    rules: {
+                        productionNo: [{ required: true, message: '请输入生产单号', trigger: 'blur' }],
+                        productId: [{ required: true, message: '请选择产品', trigger: 'change' }],
+                        quantity: [{ required: true, message: '请输入生产数量', trigger: 'blur' }]
+                    }
+                }
+            },
+            mounted() {
+                this.loadOrders();
+            },
+            methods: {
+                loadOrders() {
+                    axios.get(API_BASE + '/production-order/list', { params: { productionNo: this.searchNo } })
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.tableData = res.data.data;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载生产订单失败: ' + err.message);
+                        });
+                },
+                getStatusType(status) {
+                    const types = ['info', 'warning', 'success', 'danger'];
+                    return types[status] || 'info';
+                },
+                getStatusText(status) {
+                    const texts = ['计划中', '生产中', '已完成', '已取消'];
+                    return texts[status] || '未知';
+                },
+                handleAdd() {
+                    this.isEdit = false;
+                    this.dialogTitle = '新增生产订单';
+                    this.form = {
+                        id: null,
+                        productionNo: 'PRD' + Date.now(),
+                        productId: null,
+                        productName: '',
+                        specification: '',
+                        unit: '',
+                        quantity: 1,
+                        price: 0,
+                        totalAmount: 0,
+                        startDate: '',
+                        endDate: '',
+                        actualEndDate: '',
+                        status: 0,
+                        responsiblePerson: '',
+                        remark: ''
+                    };
+                    this.dialogVisible = true;
+                },
+                handleEdit(row) {
+                    this.isEdit = true;
+                    this.dialogTitle = '编辑生产订单';
+                    axios.get(API_BASE + '/production-order/get/' + row.id)
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.form = { ...res.data.data };
+                                this.dialogVisible = true;
+                            }
+                        })
+                        .catch(err => {
+                            this.$message.error('加载生产订单详情失败: ' + err.message);
+                        });
+                },
+                onProductChange(productId) {
+                    const product = this.products.find(p => p.id === productId);
+                    if (product) {
+                        this.form.productName = product.productName;
+                        this.form.specification = product.specification;
+                        this.form.unit = product.unit;
+                        this.form.price = product.price;
+                        this.calcTotalAmount();
+                    }
+                },
+                calcTotalAmount() {
+                    this.form.totalAmount = (this.form.price || 0) * (this.form.quantity || 0);
+                },
+                handleSubmit() {
+                    this.$refs.form.validate(valid => {
+                        if (valid) {
+                            const url = this.isEdit ? API_BASE + '/production-order/update' : API_BASE + '/production-order/add';
+                            axios.post(url, this.form)
+                                .then(res => {
+                                    if (res.data.code === 200) {
+                                        this.$message.success('操作成功');
+                                        this.dialogVisible = false;
+                                        this.loadOrders();
+                                    } else {
+                                        this.$message.error(res.data.message);
+                                    }
+                                })
+                                .catch(err => {
+                                    this.$message.error('操作失败: ' + err.message);
+                                });
+                        }
+                    });
+                },
+                handleDelete(row) {
+                    this.$confirm('确定要删除该生产订单吗？', '提示', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }).then(() => {
+                        axios.delete(API_BASE + '/production-order/delete/' + row.id)
+                            .then(res => {
+                                if (res.data.code === 200) {
+                                    this.$message.success('删除成功');
+                                    this.loadOrders();
+                                } else {
+                                    this.$message.error(res.data.message);
+                                }
+                            })
+                            .catch(err => {
+                                this.$message.error('删除失败: ' + err.message);
+                            });
+                    }).catch(() => {});
+                }
+            }
+        });
+
+        new Vue({
+            el: '#app',
+            data: {
+                activeMenu: 'customer',
+                customers: [],
+                products: []
+            },
+            mounted() {
+                this.loadCustomers();
+                this.loadProducts();
+            },
+            methods: {
+                handleMenuSelect(index) {
+                    this.activeMenu = index;
+                },
+                loadCustomers() {
+                    axios.get(API_BASE + '/customer/list')
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.customers = res.data.data;
+                            }
+                        });
+                },
+                loadProducts() {
+                    axios.get(API_BASE + '/product/list')
+                        .then(res => {
+                            if (res.data.code === 200) {
+                                this.products = res.data.data;
+                            }
+                        });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.erp.mapper.ProductionOrderMapper">
+    <resultMap id="BaseResultMap" type="com.erp.entity.ProductionOrder">
+        <id column="id" property="id"/>
+        <result column="production_no" property="productionNo"/>
+        <result column="product_id" property="productId"/>
+        <result column="product_name" property="productName"/>
+        <result column="specification" property="specification"/>
+        <result column="unit" property="unit"/>
+        <result column="quantity" property="quantity"/>
+        <result column="price" property="price"/>
+        <result column="total_amount" property="totalAmount"/>
+        <result column="start_date" property="startDate"/>
+        <result column="end_date" property="endDate"/>
+        <result column="actual_end_date" property="actualEndDate"/>
+        <result column="status" property="status"/>
+        <result column="responsible_person" property="responsiblePerson"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.erp.entity.ProductionOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO production_order (production_no, product_id, product_name, specification, unit,
+            quantity, price, total_amount, start_date, end_date, actual_end_date,
+            status, responsible_person, remark, create_time, update_time)
+        VALUES (#{productionNo}, #{productId}, #{productName}, #{specification}, #{unit},
+            #{quantity}, #{price}, #{totalAmount}, #{startDate}, #{endDate}, #{actualEndDate},
+            #{status}, #{responsiblePerson}, #{remark}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.erp.entity.ProductionOrder">
+        UPDATE production_order
+        SET product_id = #{productId},
+            product_name = #{productName},
+            specification = #{specification},
+            unit = #{unit},
+            quantity = #{quantity},
+            price = #{price},
+            total_amount = #{totalAmount},
+            start_date = #{startDate},
+            end_date = #{endDate},
+            actual_end_date = #{actualEndDate},
+            status = #{status},
+            responsible_person = #{responsiblePerson},
+            remark = #{remark},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM production_order WHERE id = #{id}
+    </delete>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT * FROM production_order WHERE id = #{id}
+    </select>
+
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT * FROM production_order
+        <where>
+            <if test="productionNo != null and productionNo != ''">
+                AND production_no LIKE CONCAT('%', #{productionNo}, '%')
+            </if>
+        </where>
+        ORDER BY create_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM production_order
+        <where>
+            <if test="productionNo != null and productionNo != ''">
+                AND production_no LIKE CONCAT('%', #{productionNo}, '%')
+            </if>
+        </where>
+    </select>
+</mapper>

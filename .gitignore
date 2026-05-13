@@ -1,0 +1,21 @@
+# IDE
+.idea/
+.vscode/
+
+# Java build
+erp-backend/target/
+*.class
+*.jar
+
+# Node
+erp-frontend/node_modules/
+node_modules/
+
+# Database files
+*.mv.db
+*.lock.db
+*.trace.db
+
+# OS
+.DS_Store
+Thumbs.db
