@@ -28,6 +28,14 @@
               <i class="el-icon-s-operation"></i>
               <span>生产管理</span>
             </el-menu-item>
+            <el-menu-item index="/supplier">
+              <i class="el-icon-s-cooperation"></i>
+              <span>供应商管理</span>
+            </el-menu-item>
+            <el-menu-item index="/purchase-order">
+              <i class="el-icon-s-order"></i>
+              <span>采购订单</span>
+            </el-menu-item>
           </el-menu>
         </el-aside>
         <el-main>

@@ -16,3 +16,9 @@ INSERT INTO production_order (production_no, product_id, product_name, specifica
 ('PRD002', 3, '机械键盘', '红轴 104键', '个', 100, 299.00, 29900.00, '2026-04-10', '2026-04-20', 0, '钱七', '补充库存'),
 ('PRD003', 2, '无线鼠标', '黑色 静音', '个', 200, 99.00, 19800.00, '2026-04-05', '2026-04-12', 2, '孙八', '紧急补货')
 ON DUPLICATE KEY UPDATE product_id=VALUES(product_id), product_name=VALUES(product_name), specification=VALUES(specification), unit=VALUES(unit), quantity=VALUES(quantity), price=VALUES(price), total_amount=VALUES(total_amount), start_date=VALUES(start_date), end_date=VALUES(end_date), status=VALUES(status), responsible_person=VALUES(responsible_person), remark=VALUES(remark);
+
+INSERT INTO supplier (supplier_no, supplier_name, contact, phone, email, address, status) VALUES
+('S001', '深圳电子供应商', '李明', '13900139001', 'liming@szsupplier.com', '深圳市南山区', 1),
+('S002', '杭州零件批发商', '刘芳', '13900139002', 'liufang@hzparts.com', '杭州市西湖区', 1),
+('S003', '东莞材料公司', '陈伟', '13900139003', 'chenwei@dgmaterial.com', '东莞市虎门镇', 1)
+ON DUPLICATE KEY UPDATE supplier_name=VALUES(supplier_name), contact=VALUES(contact), phone=VALUES(phone), email=VALUES(email), address=VALUES(address), status=VALUES(status);

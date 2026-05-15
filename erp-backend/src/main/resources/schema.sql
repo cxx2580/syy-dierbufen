@@ -68,3 +68,41 @@ CREATE TABLE IF NOT EXISTS production_order (
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS supplier (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    supplier_no VARCHAR(50) NOT NULL UNIQUE,
+    supplier_name VARCHAR(100) NOT NULL,
+    contact VARCHAR(50),
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    address VARCHAR(200),
+    status INT DEFAULT 1,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_no VARCHAR(50) NOT NULL UNIQUE,
+    supplier_id BIGINT NOT NULL,
+    supplier_name VARCHAR(100) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status INT DEFAULT 0,
+    remark VARCHAR(500),
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order_item (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    order_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    product_name VARCHAR(100) NOT NULL,
+    specification VARCHAR(100),
+    unit VARCHAR(20),
+    price DECIMAL(10,2) NOT NULL,
+    quantity INT NOT NULL,
+    subtotal DECIMAL(10,2) NOT NULL,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
